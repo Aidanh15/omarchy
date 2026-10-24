@@ -1,6 +1,7 @@
 import QtQuick
 import qs.Ui
 import qs.Commons
+import qs.Commons as Commons
 
 Column {
   id: root
@@ -28,7 +29,7 @@ Column {
   visible: hasMedia
 
   PanelSectionHeader {
-    text: "MEDIA"
+    text: Commons.I18n.t("audio.media")
     foreground: root.bar.foreground
     fontFamily: root.bar.fontFamily
   }
@@ -39,7 +40,8 @@ Column {
 
     Text {
       width: parent.width
-      text: root.displayTitle || "Media"
+      text: root.displayTitle || Commons.I18n.t("audio.mediaUntitled")
+      textFormat: Text.PlainText
       color: root.bar.foreground
       font.family: root.bar.fontFamily
       font.pixelSize: Style.font.body
@@ -50,6 +52,7 @@ Column {
     Text {
       width: parent.width
       text: root.displayArtist
+      textFormat: Text.PlainText
       visible: text !== ""
       color: Qt.darker(root.bar.foreground, 1.5)
       font.family: root.bar.fontFamily
@@ -72,7 +75,7 @@ Column {
         horizontalPadding: index === 1 ? Style.spacing.panelGap : Style.spacing.controlPaddingX
         verticalPadding: Style.spacing.controlPaddingY
         iconSize: index === 1 ? Style.font.iconLarge : Style.font.icon
-        tooltipText: index === 0 ? "Previous track" : (index === 1 ? "Play/Pause" : "Next track")
+        tooltipText: index === 0 ? Commons.I18n.t("media.previous") : (index === 1 ? Commons.I18n.t("media.playPause") : Commons.I18n.t("media.next"))
         enabled: root.enabledActions[index]
         opacity: enabled ? 1.0 : 0.4
         hasCursor: root.cursorActive && root.cursorIndex === index

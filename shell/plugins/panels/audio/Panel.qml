@@ -140,8 +140,6 @@ Panel {
     normalizeMediaControl()
   }
 
-  Component.onCompleted: syncMediaMetadata()
-
   Connections {
     target: root.activeMediaPlayer
     function refreshStateAndNormalize() {
@@ -905,7 +903,10 @@ Panel {
     onTriggered: root.resolveVolumeSink()
   }
 
-  Component.onCompleted: root.resolveVolumeSink()
+  Component.onCompleted: {
+    root.resolveVolumeSink()
+    root.syncMediaMetadata()
+  }
 
   Timer {
     id: audioModelRefreshTimer
