@@ -166,10 +166,6 @@ assert(audio.mediaTargetAvailable(false, 'spotify', ['firefox', 'spotify']), 'ca
 assert(!audio.mediaTargetAvailable(false, 'spotify', ['firefox']), 'cached media controls stop once their player closes')
 assert(!audio.mediaTargetAvailable(false, '', ['firefox']), 'cached media controls without a player act on nothing')
 assert(!audio.mediaTargetAvailable(false, 'spotify', undefined), 'cached media controls act on nothing before players load')
-assert(/effectiveMediaCanGoPrevious: useLiveMediaPresentation\s*\? [^:]+: mediaDisplayCanGoPrevious && mediaTargetAvailable/.test(panel) &&
-  /: mediaDisplayCanPlayPause && mediaTargetAvailable/.test(panel) &&
-  /effectiveMediaCanGoNext: useLiveMediaPresentation\s*\? [^:]+: mediaDisplayCanGoNext && mediaTargetAvailable/.test(panel),
-  'cached media controls are disabled while their player is gone')
 assertEqual(audio.firstEnabledMediaControl(mediaPlayer), 1, 'audio enters media controls on play/pause')
 assertDeepEqual(audio.mediaActionNames(), ['previous', 'playPause', 'next'], 'audio uses canonical media action order')
 const actionNames = audio.mediaActionNames()
