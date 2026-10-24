@@ -40,15 +40,23 @@ Panel {
   )
   readonly property bool useLiveMediaPresentation: !!activeMediaPlayer
     && Model.mediaMetadataPresent(liveMediaTitle, liveMediaArtist)
+  readonly property var mediaPlayerKeys: mediaService
+    ? mediaService.players.map(function(player) { return String(mediaService.playerKey(player) || "") })
+    : []
+  readonly property bool mediaTargetAvailable: Model.mediaTargetAvailable(
+    useLiveMediaPresentation,
+    mediaDisplayPlayerKey,
+    mediaPlayerKeys
+  )
   readonly property bool effectiveMediaPlaying: useLiveMediaPresentation
     ? !!activeMediaPlayer.isPlaying : mediaDisplayPlaying
   readonly property bool effectiveMediaCanGoPrevious: useLiveMediaPresentation
-    ? !!activeMediaPlayer.canGoPrevious : mediaDisplayCanGoPrevious
+    ? !!activeMediaPlayer.canGoPrevious : mediaDisplayCanGoPrevious && mediaTargetAvailable
   readonly property bool effectiveMediaCanPlayPause: useLiveMediaPresentation
     ? !!(activeMediaPlayer.canTogglePlaying || activeMediaPlayer.canPlay || activeMediaPlayer.canPause)
-    : mediaDisplayCanPlayPause
+    : mediaDisplayCanPlayPause && mediaTargetAvailable
   readonly property bool effectiveMediaCanGoNext: useLiveMediaPresentation
-    ? !!activeMediaPlayer.canGoNext : mediaDisplayCanGoNext
+    ? !!activeMediaPlayer.canGoNext : mediaDisplayCanGoNext && mediaTargetAvailable
   readonly property var mediaControlState: mediaVisible ? ({
     canGoPrevious: effectiveMediaCanGoPrevious,
     canTogglePlaying: effectiveMediaCanPlayPause,
@@ -133,6 +141,7 @@ Panel {
   }
 
   onMediaVisibleChanged: normalizeMediaControl()
+  onMediaTargetAvailableChanged: normalizeMediaControl()
   onLiveMediaTitleChanged: syncMediaMetadata()
   onLiveMediaArtistChanged: syncMediaMetadata()
   onActiveMediaPlayerChanged: {

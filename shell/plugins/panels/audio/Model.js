@@ -284,6 +284,14 @@ function mediaVisible(player, cachedTitle, cachedArtist, allowCachedMetadata) {
   return allowCachedMetadata === true && mediaMetadataPresent(cachedTitle, cachedArtist)
 }
 
+// Live controls act on the player they show. Cached controls belong to a
+// player that may have closed, and the media service falls back to another
+// player for a key it cannot find, so they only act while theirs is open.
+function mediaTargetAvailable(useLivePresentation, cachedKey, playerKeys) {
+  if (useLivePresentation) return true
+  return !!cachedKey && (playerKeys || []).indexOf(cachedKey) >= 0
+}
+
 function mediaActionEnabled(player, action) {
   if (!player) return false
   if (action === "previous") return !!player.canGoPrevious
@@ -350,6 +358,7 @@ if (typeof module !== "undefined") {
     mediaMetadataPresent: mediaMetadataPresent,
     mediaVisible: mediaVisible,
     mediaActionEnabled: mediaActionEnabled,
+    mediaTargetAvailable: mediaTargetAvailable,
     mediaActionNames: mediaActionNames,
     mediaActions: mediaActions,
     firstEnabledMediaControl: firstEnabledMediaControl,
