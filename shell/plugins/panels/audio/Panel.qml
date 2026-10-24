@@ -20,108 +20,48 @@ Panel {
   readonly property var mprisPlayers: Mpris.players ? Mpris.players.values : []
   readonly property var mediaService: bar?.shell?.firstPartyServiceFor("omarchy.media")
   readonly property var activeMediaPlayer: mediaService ? mediaService.activePlayer : null
-  readonly property string liveMediaTitle: activeMediaPlayer ? String(activeMediaPlayer.trackTitle || "") : ""
-  readonly property string liveMediaArtist: activeMediaPlayer ? String(activeMediaPlayer.trackArtist || "") : ""
-  property string mediaDisplayPlayerKey: ""
-  property string mediaDisplayTitle: ""
-  property string mediaDisplayArtist: ""
-  property bool mediaDisplayPlaying: false
-  property bool mediaDisplayCanGoPrevious: false
-  property bool mediaDisplayCanPlayPause: false
-  property bool mediaDisplayCanGoNext: false
-  readonly property bool hasCachedMediaMetadata: mediaDisplayTitle !== "" || mediaDisplayArtist !== ""
-  readonly property string effectiveMediaTitle: hasCachedMediaMetadata ? mediaDisplayTitle : liveMediaTitle
-  readonly property string effectiveMediaArtist: hasCachedMediaMetadata ? mediaDisplayArtist : liveMediaArtist
-  readonly property bool mediaVisible: Model.mediaVisible(
-    activeMediaPlayer,
-    mediaDisplayTitle,
-    mediaDisplayArtist,
-    hasCachedMediaMetadata
-  )
-  readonly property bool useLiveMediaPresentation: !!activeMediaPlayer
-    && Model.mediaMetadataPresent(liveMediaTitle, liveMediaArtist)
+  readonly property var mediaLive: currentMediaLive()
+  readonly property string liveMediaTitle: mediaLive ? mediaLive.title : ""
+  readonly property string liveMediaArtist: mediaLive ? mediaLive.artist : ""
+  property var mediaCache: Model.emptyMediaCache()
   readonly property var mediaPlayerKeys: mediaService
     ? mediaService.players.map(function(player) { return String(mediaService.playerKey(player) || "") })
     : []
-  readonly property bool mediaTargetAvailable: Model.mediaTargetAvailable(
-    useLiveMediaPresentation,
-    mediaDisplayPlayerKey,
-    mediaPlayerKeys
-  )
-  readonly property bool effectiveMediaPlaying: useLiveMediaPresentation
-    ? !!activeMediaPlayer.isPlaying : mediaDisplayPlaying
-  readonly property bool effectiveMediaCanGoPrevious: useLiveMediaPresentation
-    ? !!activeMediaPlayer.canGoPrevious : mediaDisplayCanGoPrevious && mediaTargetAvailable
-  readonly property bool effectiveMediaCanPlayPause: useLiveMediaPresentation
-    ? !!(activeMediaPlayer.canTogglePlaying || activeMediaPlayer.canPlay || activeMediaPlayer.canPause)
-    : mediaDisplayCanPlayPause && mediaTargetAvailable
-  readonly property bool effectiveMediaCanGoNext: useLiveMediaPresentation
-    ? !!activeMediaPlayer.canGoNext : mediaDisplayCanGoNext && mediaTargetAvailable
+  readonly property var mediaShown: Model.mediaPresentation(mediaCache, mediaLive, mediaPlayerKeys)
+  readonly property bool mediaVisible: mediaShown.visible
+  readonly property string effectiveMediaTitle: mediaShown.title
+  readonly property string effectiveMediaArtist: mediaShown.artist
+  readonly property bool effectiveMediaPlaying: mediaShown.playing
+  readonly property bool effectiveMediaCanGoPrevious: mediaShown.canGoPrevious
+  readonly property bool effectiveMediaCanPlayPause: mediaShown.canPlayPause
+  readonly property bool effectiveMediaCanGoNext: mediaShown.canGoNext
+  readonly property bool mediaTargetAvailable: mediaShown.targetAvailable
   readonly property var mediaControlState: mediaVisible ? ({
     canGoPrevious: effectiveMediaCanGoPrevious,
     canTogglePlaying: effectiveMediaCanPlayPause,
     canGoNext: effectiveMediaCanGoNext
   }) : null
 
-  function clearMediaMetadata() {
-    mediaMetadataCommitTimer.stop()
-    mediaMetadataClearTimer.stop()
-    mediaDisplayPlayerKey = ""
-    mediaDisplayTitle = ""
-    mediaDisplayArtist = ""
-    mediaDisplayPlaying = false
-    mediaDisplayCanGoPrevious = false
-    mediaDisplayCanPlayPause = false
-    mediaDisplayCanGoNext = false
+  function applyMediaTimer(timer, command) {
+    if (command === "restart") timer.restart()
+    else if (command === "stop") timer.stop()
   }
 
-  function refreshMediaPresentationState() {
-    if (!activeMediaPlayer || !Model.mediaMetadataPresent(liveMediaTitle, liveMediaArtist)) {
-      // Retain the last complete presentation and action target during a
-      // transient MPRIS handoff instead of mixing the replacement player's state.
-      return
-    }
-    mediaDisplayPlayerKey = mediaService ? String(mediaService.playerKey(activeMediaPlayer) || "") : ""
-    mediaDisplayPlaying = !!activeMediaPlayer.isPlaying
-    mediaDisplayCanGoPrevious = !!activeMediaPlayer.canGoPrevious
-    mediaDisplayCanPlayPause = !!(activeMediaPlayer.canTogglePlaying || activeMediaPlayer.canPlay || activeMediaPlayer.canPause)
-    mediaDisplayCanGoNext = !!activeMediaPlayer.canGoNext
+  function currentMediaLive() {
+    return Model.mediaLiveState(
+      activeMediaPlayer,
+      mediaService && activeMediaPlayer ? mediaService.playerKey(activeMediaPlayer) : ""
+    )
   }
 
-  function commitMediaMetadata() {
-    if (!activeMediaPlayer || !Model.mediaMetadataPresent(liveMediaTitle, liveMediaArtist)) {
-      syncMediaMetadata()
-      return
-    }
-    mediaDisplayTitle = liveMediaTitle
-    mediaDisplayArtist = liveMediaArtist
-    refreshMediaPresentationState()
-  }
-
-  function syncMediaMetadata() {
-    if (!activeMediaPlayer) {
-      mediaMetadataCommitTimer.stop()
-      if (hasCachedMediaMetadata)
-        mediaMetadataClearTimer.restart()
-      else
-        clearMediaMetadata()
-      return
-    }
-    if (Model.mediaMetadataPresent(liveMediaTitle, liveMediaArtist)) {
-      mediaMetadataClearTimer.stop()
-      // MPRIS fields often arrive in separate signals. Commit them together
-      // after a short settling window so title and artist change as one unit.
-      mediaMetadataCommitTimer.restart()
-      return
-    }
-    mediaMetadataCommitTimer.stop()
-    if (hasCachedMediaMetadata) {
-      // Chromium may briefly unregister and replace its MPRIS player while
-      // skipping. Keep the last complete presentation unless the gap persists.
-      mediaMetadataClearTimer.restart()
-    } else {
-      clearMediaMetadata()
-    }
+  // The handoff decisions live in Model.mediaHandoffStep; this applies them.
+  // It reads the player directly, since a handler can run before mediaLive's
+  // binding catches up with the change that triggered it.
+  function stepMediaHandoff(event) {
+    var result = Model.mediaHandoffStep(mediaCache, currentMediaLive(), event)
+    applyMediaTimer(mediaMetadataCommitTimer, result.commitTimer)
+    applyMediaTimer(mediaMetadataClearTimer, result.clearTimer)
+    if (result.cache !== mediaCache) mediaCache = result.cache
   }
 
   function normalizeMediaControl() {
@@ -134,25 +74,22 @@ Panel {
   }
 
   function mediaActionTargetKey() {
-    if (!mediaService) return ""
-    if (activeMediaPlayer && useLiveMediaPresentation)
-      return String(mediaService.playerKey(activeMediaPlayer) || "")
-    return mediaDisplayPlayerKey
+    return mediaService ? mediaShown.targetKey : ""
   }
 
   onMediaVisibleChanged: normalizeMediaControl()
   onMediaTargetAvailableChanged: normalizeMediaControl()
-  onLiveMediaTitleChanged: syncMediaMetadata()
-  onLiveMediaArtistChanged: syncMediaMetadata()
+  onLiveMediaTitleChanged: stepMediaHandoff("sync")
+  onLiveMediaArtistChanged: stepMediaHandoff("sync")
   onActiveMediaPlayerChanged: {
-    syncMediaMetadata()
+    stepMediaHandoff("sync")
     normalizeMediaControl()
   }
 
   Connections {
     target: root.activeMediaPlayer
     function refreshStateAndNormalize() {
-      root.refreshMediaPresentationState()
+      root.stepMediaHandoff("refresh")
       root.normalizeMediaControl()
     }
     function onIsPlayingChanged() { refreshStateAndNormalize() }
@@ -914,7 +851,7 @@ Panel {
 
   Component.onCompleted: {
     root.resolveVolumeSink()
-    root.syncMediaMetadata()
+    root.stepMediaHandoff("sync")
   }
 
   Timer {
@@ -926,21 +863,16 @@ Panel {
 
   Timer {
     id: mediaMetadataCommitTimer
-    interval: 90
+    interval: Model.mediaHandoffDelays().commit
     repeat: false
-    onTriggered: root.commitMediaMetadata()
+    onTriggered: root.stepMediaHandoff("commit")
   }
 
   Timer {
     id: mediaMetadataClearTimer
-    interval: 2000
+    interval: Model.mediaHandoffDelays().clear
     repeat: false
-    onTriggered: {
-      if (root.activeMediaPlayer && Model.mediaMetadataPresent(root.liveMediaTitle, root.liveMediaArtist))
-        root.commitMediaMetadata()
-      else
-        root.clearMediaMetadata()
-    }
+    onTriggered: root.stepMediaHandoff("clearExpired")
   }
 
   BarIconButton {
